@@ -22,9 +22,6 @@
 #include <errno.h>
 #include <pthread.h>
 
-#define PORT 12345
-#define SERVER_IP "127.0.0.1"
-
 uint64_t difftimespec_ns(const struct timespec after, const struct timespec before)
 {
     uint64_t elapsed_time_ns = ((uint64_t)after.tv_sec - (uint64_t)before.tv_sec) * (uint64_t)1000000000ULL
@@ -93,6 +90,8 @@ struct thread_args {
     uint64_t total_bytes;
     uint64_t total_ns;
     uint64_t iterations;
+    const char* server_ip;  // Add server IP
+    int port;              // Add port
 };
 
 void* thread_func(void* arg) {
@@ -105,13 +104,14 @@ void* thread_func(void* arg) {
 
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(PORT);
-    inet_pton(AF_INET, SERVER_IP, &addr.sin_addr);
+    addr.sin_port = htons(args->port);
+    inet_pton(AF_INET, args->server_ip, &addr.sin_addr);
 
     if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("connect"); pthread_exit(NULL);
     }
-    printf("[client-thread-%d] connected to %s:%d\n", args->thread_id, SERVER_IP, PORT);
+    printf("[client-thread-%d] connected to %s:%d\n", 
+           args->thread_id, args->server_ip, args->port);
 
     int64_t duration_sec_ns = args->duration_sec * 1000000000ULL;
     while (1) {
@@ -131,7 +131,8 @@ void* thread_func(void* arg) {
     return NULL;
 }
 
-void run_test(int size1, int size2, int duration_sec, int num_threads) {
+void run_test(int size1, int size2, int duration_sec, int num_threads, 
+              const char* server_ip, int port) {
     pthread_t* threads = malloc(num_threads * sizeof(pthread_t));
     struct thread_args* args = malloc(num_threads * sizeof(struct thread_args));
     
@@ -147,6 +148,8 @@ void run_test(int size1, int size2, int duration_sec, int num_threads) {
         args[i].total_bytes = 0;
         args[i].total_ns = 0;
         args[i].iterations = 0;
+        args[i].server_ip = server_ip;  // Set server IP
+        args[i].port = port;            // Set port
         
         if (pthread_create(&threads[i], NULL, thread_func, &args[i]) != 0) {
             perror("pthread_create");
@@ -203,24 +206,29 @@ void run_test(int size1, int size2, int duration_sec, int num_threads) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 5) {
-        fprintf(stderr, "Usage: %s <duration_sec> <size_1> <size_2> <num_threads>\n", argv[0]);
+    if (argc != 7) {
+        fprintf(stderr, "Usage: %s <server_ip> <port> <duration_sec> <size_1_kb> <size_2_kb> <num_threads>\n", 
+                argv[0]);
         return 1;
     }
     
-    int duration_sec = atoi(argv[1]);
-    int size_1 = atoi(argv[2]);
-    int size_2 = atoi(argv[3]);
-    int num_threads = atoi(argv[4]);
+    const char* server_ip = argv[1];
+    int port = atoi(argv[2]);
+    int duration_sec = atoi(argv[3]);
+    int size_1 = atoi(argv[4]);
+    int size_2 = atoi(argv[5]);
+    int num_threads = atoi(argv[6]);
 
-    if (duration_sec <= 0 || size_1 <= 0 || size_2 <= 0 || num_threads <= 0) {
+    if (duration_sec <= 0 || size_1 <= 0 || size_2 <= 0 || 
+        num_threads <= 0 || port <= 0 || port > 65535) {
         fprintf(stderr, "Invalid arguments\n");
         return 1;
     }
 
-    printf("Running test with %d threads for %d seconds with sizes %d KB and %d KB\n", 
-           num_threads, duration_sec, size_1, size_2);
+    printf("Running test with %d threads for %d seconds with sizes %d KB and %d KB\n"
+           "Connecting to %s:%d\n", 
+           num_threads, duration_sec, size_1, size_2, server_ip, port);
 
-    run_test(size_1 * 1024, size_2 * 1024, duration_sec, num_threads);
+    run_test(size_1 * 1024, size_2 * 1024, duration_sec, num_threads, server_ip, port);
     return 0;
 }
