@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -g -fPIC -lm
+CFLAGS := -Wall -g -fPIC -lm -pthread
 SOFLAGS := -shared
 LDFLAGS := -ldl
 
