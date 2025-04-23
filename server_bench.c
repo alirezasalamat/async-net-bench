@@ -26,7 +26,7 @@ static void sig_handler(int signo) {
     running = 0;
 }
 
-#define PORT        12345
+// #define PORT 12345
 #define MAX_EVENTS  64
 #define BUF_SIZE    (1024 * 1024 * 128)    // send in up to 128 MB chunks
 
@@ -55,7 +55,22 @@ static void cleanup_client(int epfd, struct client *c) {
     free(c);
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <bind_ip> <port>\n", argv[0]);
+        fprintf(stderr, "Example: %s 0.0.0.0 12345    # Listen on all interfaces\n", argv[0]);
+        fprintf(stderr, "         %s 127.0.0.1 12345  # Listen only on localhost\n", argv[0]);
+        exit(1);
+    }
+
+    const char* bind_ip = argv[1];
+    int port = atoi(argv[2]);
+
+    if (port <= 0 || port > 65535) {
+        fprintf(stderr, "Invalid port number (must be between 1-65535)\n");
+        exit(1);
+    }
+
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
     
@@ -72,8 +87,11 @@ int main(void) {
 
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(PORT);
+    if (inet_pton(AF_INET, bind_ip, &addr.sin_addr) <= 0) {
+        fprintf(stderr, "Invalid IP address: %s\n", bind_ip);
+        exit(1);
+    }
+    addr.sin_port = htons(port);
     if (bind(listen_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind"); exit(1);
     }
@@ -98,7 +116,7 @@ int main(void) {
         perror("epoll_ctl: listen_fd"); exit(1);
     }
 
-    printf("[server] listening on port %d\n", PORT);
+    printf("[server] listening on %s:%d\n", bind_ip, port);
 
     // 5) Main event loop
     struct epoll_event events[MAX_EVENTS];
