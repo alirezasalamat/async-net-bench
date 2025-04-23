@@ -83,7 +83,18 @@ int main(int argc, char *argv[]) {
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd < 0) { perror("socket"); exit(1); }
     int opt = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        close(listen_fd);
+        exit(1);
+    }
+
+    if (setsockopt(listen_fd, SOL_SOCKET, SO_ZEROCOPY, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_ZEROCOPY) failed");
+        close(listen_fd);
+        exit(1);
+    }
 
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
